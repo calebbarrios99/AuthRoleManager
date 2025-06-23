@@ -1,33 +1,47 @@
 using System.Security.Claims;
+using System.Text;
+using AuthRoleManager;
 using AuthRoleManager.Data;
 using AuthRoleManager.Models;
-using AuthRoleManager.Utilities;
+using AuthRoleManager.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
-using OpenIddict.Validation.AspNetCore;
+using Microsoft.IdentityModel.Tokens;
 using Quartz;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
+var env = builder.Environment;
 
-// Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+// builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase("TodoList"));
+builder.Services.AddDbContextPool<ApplicationDbContext>(opt =>
 {
-    options.UseNpgsql(connectionString);
-    options.UseOpenIddict();
+    opt.UseNpgsql(builder.Configuration.GetConnectionString("DbContext"))
+        .UseSnakeCaseNamingConvention();
+
+    if (env.IsDevelopment())
+    {
+        opt.EnableSensitiveDataLogging();
+    }
+    // Register the entity sets needed by OpenIddict.
+    opt.UseOpenIddict();
 });
 
-builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddOpenApiDocument(config =>
+{
+    config.DocumentName = "AuthRoleManager";
+    config.Title = "AuthRoleManager v1";
+    config.Version = "v1";
+});
 
+builder.Services.AddAutoMapper(typeof(Program));
 builder.Services.AddControllers();
 
 #region Managers
 builder.Services.AddScoped<LoginManager>();
 builder.Services.AddScoped<UserCreationManager>();
-
 #endregion
 
 #region  identity
@@ -38,20 +52,45 @@ builder
     .AddDefaultTokenProviders();
 #endregion
 
-// Configure Identity options
+// Add services to the container.
+#region Services
+// Singleton -> un servicio que se crea una sola vez y se comparte en toda la aplicación.
+// Transient -> un servicio que se crea cada vez que se solicita.
+// Scoped -> un servicio que se crea una vez por solicitud HTTP.
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddSingleton<PostgresService>();
+builder.Services.AddScoped<
+    Microsoft.AspNetCore.Identity.IPasswordHasher<User>,
+    Microsoft.AspNetCore.Identity.PasswordHasher<User>
+>();
+#endregion
+
 builder.Services.Configure<IdentityOptions>(options =>
 {
-    options.ClaimsIdentity.UserNameClaimType = Claims.Name;
-    options.ClaimsIdentity.UserIdClaimType = Claims.Subject;
-    options.ClaimsIdentity.RoleClaimType = Claims.Role;
-
-    // Password settings
-    options.Password.RequireDigit = false;
-    options.Password.RequiredLength = 6;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireLowercase = false;
+    //     options.ClaimsIdentity.UserNameClaimType = Claims.Name;
+    //     options.ClaimsIdentity.UserIdClaimType = Claims.Subject;
+    options.ClaimsIdentity.RoleClaimType = ClaimTypes.Role;
 });
+
+builder
+    .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(jwtOptions =>
+    {
+        // jwtOptions.Authority = "https://www.tiendana.com";
+        jwtOptions.Audience = builder.Configuration["Authentication:Jwt:Audience"]!;
+        jwtOptions.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Authentication:Jwt:SigningKey"]!)
+            ),
+            ValidIssuer = builder.Configuration["Authentication:Jwt:Issuer"]!,
+        };
+    });
+
+#region openIddict
 
 // OpenIddict offers native integration with Quartz.NET to perform scheduled tasks
 // (like pruning orphaned authorizations/tokens from the database) at regular intervals.
@@ -64,7 +103,6 @@ builder.Services.AddQuartz(options =>
 // Register the Quartz.NET service and configure it to block shutdown until jobs are complete.
 builder.Services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
-// Configure OpenIddict
 builder
     .Services.AddOpenIddict()
     // Register the OpenIddict core components.
@@ -73,7 +111,6 @@ builder
         // Configure OpenIddict to use the Entity Framework Core stores and models.
         // Note: call ReplaceDefaultEntities() to replace the default OpenIddict entities.
         options.UseEntityFrameworkCore().UseDbContext<ApplicationDbContext>();
-
         // Enable Quartz.NET integration.
         options.UseQuartz();
     })
@@ -83,22 +120,19 @@ builder
         // Enable the token endpoint.
         options.SetTokenEndpointUris("connect/token");
 
-        options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OpenId, Scopes.Roles);
+        // options.UseReferenceAccessTokens();
 
-        // Enable the password flow and refresh token flow.
-        options.AllowPasswordFlow().AllowRefreshTokenFlow();
+        // Enable the client credentials flow.
+        options
+            // .AllowClientCredentialsFlow()
+            .AllowPasswordFlow()
+            .AllowRefreshTokenFlow();
 
-        // Accept anonymous clients (no client authentication).
         options.AcceptAnonymousClients();
 
         // Register the signing and encryption credentials.
         options.AddDevelopmentEncryptionCertificate().AddDevelopmentSigningCertificate();
 
-        // Set token lifetimes
-        options.SetAccessTokenLifetime(TimeSpan.FromDays(30));
-        options.SetRefreshTokenLifetime(TimeSpan.FromDays(365));
-
-        // Disable access token encryption for development
         options.DisableAccessTokenEncryption();
 
         // Register the ASP.NET Core host and configure the ASP.NET Core-specific options.
@@ -114,170 +148,59 @@ builder
         options.UseAspNetCore();
     });
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-    options.DefaultAuthenticateScheme = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-});
+#endregion
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc(
-        "v1",
-        new OpenApiInfo
+#region Policies
+
+builder
+    .Services.AddAuthorizationBuilder()
+    .AddPolicy(
+        "categoryAdd",
+        policy =>
         {
-            Version = "v1.0.0",
-            Title = "AuthRoleManager API",
-            Description =
-                "API con sistema de autenticación OpenIddict y autorización basada en claims",
-            Contact = new OpenApiContact { Name = "Developer", Email = "developer@example.com" },
+            policy.RequireAuthenticatedUser();
+            policy.RequireClaim("permission", "category.add");
+        }
+    )
+    .AddPolicy(
+        "productAdd",
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireClaim("permission", "product.add");
         }
     );
+#endregion
 
-    options.AddSecurityDefinition(
-        "Bearer",
-        new OpenApiSecurityScheme
-        {
-            Description =
-                "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-            Name = "Authorization",
-            In = ParameterLocation.Header,
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-        }
-    );
-
-    options.AddSecurityRequirement(
-        new OpenApiSecurityRequirement
-        {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer",
-                    },
-                },
-                Array.Empty<string>()
-            },
-        }
-    );
-});
+#region background Services
+builder.Services.AddHostedService<DbFeed>();
+#endregion
 
 var app = builder.Build();
+app.MapControllers();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "AuthRoleManager API v1");
-        options.RoutePrefix = "swagger";
+app.UseRouting();
+app.UseCors();
 
-        // Habilitar funciones de copia y prueba
-        options.EnableTryItOutByDefault();
-        options.DisplayRequestDuration();
-        options.EnableDeepLinking();
-        options.EnableFilter();
-        options.ShowExtensions();
-        options.EnableValidator();
-
-        // Configuración para mostrar URLs completas
-        options.ConfigObject.AdditionalItems["syntaxHighlight"] = new Dictionary<string, object>
-        {
-            ["activated"] = true,
-            ["theme"] = "monokai",
-        };
-    });
-}
-
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Ruta raíz
-app.MapGet("/", () => "Hello world");
-
-app.MapControllers();
-
-// Seed data
-using (var scope = app.Services.CreateScope())
+app.UseOpenApi();
+app.UseSwaggerUi(config =>
 {
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+    config.DocumentTitle = "AuthRoleManager";
+    config.Path = "/swagger";
+    config.DocumentPath = "/swagger/{documentName}/swagger.json";
+    config.DocExpansion = "list";
+});
 
-    await context.Database.EnsureCreatedAsync(); // Create roles if they don't exist
-    if (!await roleManager.RoleExistsAsync(Roles.Admin))
-    {
-        var adminRole = new ApplicationRole
-        {
-            Name = Roles.Admin,
-            Description = "Administrator role",
-        };
-        await roleManager.CreateAsync(adminRole);
+// minimal api
+app.MapGet("/", () => "Hello World!");
 
-        // Add permissions to Admin role
-        var adminPermissions = new[]
-        {
-            "roles.view",
-            "roles.edit",
-            "roles.assign",
-            "users.view",
-            "users.create",
-            "users.edit",
-            "users.delete",
-        };
-
-        foreach (var permission in adminPermissions)
-        {
-            await roleManager.AddClaimAsync(
-                adminRole,
-                new Claim(CustomClaimTypes.Permission, permission)
-            );
-        }
-    }
-
-    if (!await roleManager.RoleExistsAsync(Roles.User))
-    {
-        var userRole = new ApplicationRole { Name = Roles.User, Description = "Regular user role" };
-        await roleManager.CreateAsync(userRole);
-    }
-
-    // Create default admin user
-    var adminUser = await userManager.FindByNameAsync("admin");
-    if (adminUser == null)
-    {
-        adminUser = new ApplicationUser
-        {
-            UserName = "admin",
-            Email = "admin@example.com",
-            LastName = "Administrator",
-            EmailConfirmed = true,
-        };
-        await userManager.CreateAsync(adminUser, "Admin123!");
-        await userManager.AddToRoleAsync(adminUser, Roles.Admin);
-    }
-
-    // Create default regular user
-    var regularUser = await userManager.FindByNameAsync("user");
-    if (regularUser == null)
-    {
-        regularUser = new ApplicationUser
-        {
-            UserName = "user",
-            Email = "user@example.com",
-            LastName = "User",
-            EmailConfirmed = true,
-        };
-        await userManager.CreateAsync(regularUser, "User123!");
-        await userManager.AddToRoleAsync(regularUser, Roles.User);
-    }
-}
+// app.MapGet("/api/Todo", () => new List<Todo>
+// {
+//     new Todo { Id = 1, Name = "Learn ASP.NET Core", IsComplete = false },
+//     // new Todo { Id = 2, Name = "Build a web API", IsComplete = true }
+// });
 
 app.Run();

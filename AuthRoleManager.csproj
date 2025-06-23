@@ -5,12 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference
-      Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"
-      Version="8.0.17"
-    />
+    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.0" />
+    <PackageReference Include="EFCore.NamingConventions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.17" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.7" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
+    <PackageReference Include="NSwag.AspNetCore" Version="14.0.0" />
     <PackageReference Include="OpenIddict.AspNetCore" Version="6.4.0" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="6.4.0" />
     <PackageReference Include="OpenIddict.Quartz" Version="6.4.0" />

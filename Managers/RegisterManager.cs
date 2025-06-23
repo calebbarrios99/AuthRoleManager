@@ -1,5 +1,7 @@
 using AuthRoleManager.Models;
+using AuthRoleManager.Models.Dto;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 
 public class UserCreationManager
 {
@@ -18,56 +20,57 @@ public class UserCreationManager
         _logger = logger;
     }
 
-    public async Task<object?> CreateUserWithRoleAsync(
-        string email,
-        string password,
-        string roleName = "User"
-    )
+    public async Task<object?> CreateUserWithRoleAsync([FromBody] CreateUserRequest request)
     {
-        // Crear rol si no existe
-        var roleExists = await _roleManager.RoleExistsAsync(roleName);
-        if (!roleExists)
         {
-            var role = new ApplicationRole { Name = roleName };
-            var roleResult = await _roleManager.CreateAsync(role);
-            if (!roleResult.Succeeded)
+            var roleName = "User";
+            // Crear rol si no existe
+            var roleExists = await _roleManager.RoleExistsAsync(roleName);
+            if (!roleExists)
             {
-                return new { Error = "Failed to create role" };
+                var role = new ApplicationRole { Name = roleName };
+                var roleResult = await _roleManager.CreateAsync(role);
+                if (!roleResult.Succeeded)
+                {
+                    return new { Error = "Failed to create role" };
+                }
             }
-        }
 
-        // Crear usuario
-        var user = new ApplicationUser
-        {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true,
-        };
+            var user = new ApplicationUser
+            {
+                UserName = request.Email,
+                Email = request.Email,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                Address = request.Address,
+                EmailConfirmed = true,
+            };
 
-        var result = await _userManager.CreateAsync(user, password);
-        if (!result.Succeeded)
-        {
-            _logger.LogError(
-                "Failed to create user {Email}: {Errors}",
-                email,
-                string.Join(", ", result.Errors.Select(e => e.Description))
+            var result = await _userManager.CreateAsync(user, request.Password);
+            if (!result.Succeeded)
+            {
+                _logger.LogError(
+                    "Failed to create user {Email}: {Errors}",
+                    request.Email,
+                    string.Join(", ", result.Errors.Select(e => e.Description))
+                );
+                return new { Error = "Failed to create user" };
+            }
+
+            // Asignar rol
+            await _userManager.AddToRoleAsync(user, roleName);
+            _logger.LogInformation(
+                "User {Email} created successfully with role {Role}.",
+                user.Email,
+                roleName
             );
-            return new { Error = "Failed to create user" };
+
+            return new
+            {
+                Success = true,
+                UserId = user.Id,
+                Role = roleName,
+            };
         }
-
-        // Asignar rol
-        await _userManager.AddToRoleAsync(user, roleName);
-        _logger.LogInformation(
-            "User {Email} created successfully with role {Role}.",
-            user.Email,
-            roleName
-        );
-
-        return new
-        {
-            Success = true,
-            UserId = user.Id,
-            Role = roleName,
-        };
     }
 }

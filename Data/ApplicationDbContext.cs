@@ -1,15 +1,27 @@
 using AuthRoleManager.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthRoleManager.Data;
 
-public class ApplicationDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, string> // DbContext
+public class ApplicationDbContext
+    : IdentityDbContext<
+        ApplicationUser,
+        ApplicationRole,
+        string,
+        IdentityUserClaim<string>,
+        ApplicationUserRole,
+        IdentityUserLogin<string>,
+        IdentityRoleClaim<string>,
+        IdentityUserToken<string>
+    >
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options) { }
 
     public DbSet<User> users { get; set; } = null!;
+    public DbSet<Role> role { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -18,17 +30,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
         // Configure Identity table names to use snake_case
         modelBuilder.Entity<ApplicationUser>(b =>
         {
-            b.HasMany(e => e.Claims).WithOne().HasForeignKey(uc => uc.UserId).IsRequired();
-
-            // Each User can have many UserLogins
-            b.HasMany(e => e.Logins).WithOne().HasForeignKey(ul => ul.UserId).IsRequired();
-
-            // Each User can have many UserTokens
-            b.HasMany(e => e.Tokens).WithOne().HasForeignKey(ut => ut.UserId).IsRequired();
-
-            // Each User can have many entries in the UserRole join table
-            b.HasMany(e => e.UserRoles).WithOne().HasForeignKey(ur => ur.UserId).IsRequired();
-
             b.ToTable("asp_net_users");
 
             // Configure indexes with snake_case names
@@ -45,13 +46,34 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
             b.HasMany(e => e.Tokens).WithOne().HasForeignKey(ut => ut.UserId).IsRequired();
 
             // Each User can have many entries in the UserRole join table
-            b.HasMany(e => e.UserRoles).WithOne().HasForeignKey(ur => ur.UserId).IsRequired();
+            b.HasMany(e => e.UserRoles)
+                .WithOne(e => e.User)
+                .HasForeignKey(ur => ur.UserId)
+                .IsRequired();
         });
 
         modelBuilder.Entity<ApplicationRole>(b =>
         {
             b.ToTable("asp_net_roles");
             b.HasIndex(u => u.NormalizedName).HasDatabaseName("normalized_name_index");
+
+            // Each Role can have many entries in the UserRole join table
+            b.HasMany(e => e.UserRoles)
+                .WithOne(e => e.Role)
+                .HasForeignKey(ur => ur.RoleId)
+                .IsRequired();
+
+            // Each Role can have many associated RoleClaims
+            b.HasMany(e => e.RoleClaims).WithOne().HasForeignKey(rc => rc.RoleId).IsRequired();
+        });
+
+        // Configure ApplicationUserRole with composite primary key
+        modelBuilder.Entity<ApplicationUserRole>(b =>
+        {
+            b.ToTable("asp_net_user_roles");
+            b.HasKey(ur => new { ur.UserId, ur.RoleId });
+            b.HasIndex(ur => ur.RoleId).HasDatabaseName("ix_application_user_roles_role_id");
+            b.HasIndex(ur => ur.UserId).HasDatabaseName("ix_application_user_roles_user_id");
         });
 
         // Configure Identity-related tables to use snake_case
@@ -72,12 +94,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
             b.ToTable("asp_net_user_tokens");
         });
 
-        modelBuilder.Entity<Microsoft.AspNetCore.Identity.IdentityUserRole<string>>(b =>
-        {
-            b.ToTable("asp_net_user_roles");
-            b.HasIndex(ur => ur.RoleId).HasDatabaseName("ix_application_user_roles_role_id");
-        });
-
         modelBuilder.Entity<Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>>(b =>
         {
             b.ToTable("asp_net_role_claims");
@@ -85,5 +101,25 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
         });
 
         modelBuilder.Entity<User>().Property(e => e.CreateDate).HasDefaultValueSql("now()");
+
+        // Temporalmente comentado hasta crear las tablas principales
+        // modelBuilder
+        //     .Entity<User>()
+        //     .Property(p => p.FullName)
+        //     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);
     }
 }
+// modelBuilder
+//     .Entity<User>()
+//     .Property(p => p.FullName)
+//     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);
+// Temporalmente comentado hasta crear las tablas principales
+// modelBuilder
+//     .Entity<User>()
+//     .Property(p => p.FullName)
+//     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);
+
+// modelBuilder
+//     .Entity<User>()
+//     .Property(p => p.FullName)
+//     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);

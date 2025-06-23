@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AuthRoleManager.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreateWithIdentityAndOpenIddict : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -100,7 +100,7 @@ namespace AuthRoleManager.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Role",
+                name: "role",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -110,7 +110,7 @@ namespace AuthRoleManager.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Role", x => x.Id);
+                    table.PrimaryKey("PK_role", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -261,9 +261,9 @@ namespace AuthRoleManager.Migrations
                 {
                     table.PrimaryKey("PK_users", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_users_Role_RoleId",
+                        name: "FK_users_role_RoleId",
                         column: x => x.RoleId,
-                        principalTable: "Role",
+                        principalTable: "role",
                         principalColumn: "Id");
                 });
 
@@ -325,6 +325,11 @@ namespace AuthRoleManager.Migrations
                 name: "ix_application_user_roles_role_id",
                 table: "asp_net_user_roles",
                 column: "RoleId");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_application_user_roles_user_id",
+                table: "asp_net_user_roles",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "email_index",
@@ -413,7 +418,7 @@ namespace AuthRoleManager.Migrations
                 name: "OpenIddictAuthorizations");
 
             migrationBuilder.DropTable(
-                name: "Role");
+                name: "role");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictApplications");

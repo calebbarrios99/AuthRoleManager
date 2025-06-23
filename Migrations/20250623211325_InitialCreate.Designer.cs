@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AuthRoleManager.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250620153949_InitialCreateWithIdentityAndOpenIddict")]
-    partial class InitialCreateWithIdentityAndOpenIddict
+    [Migration("20250623211325_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -126,6 +126,25 @@ namespace AuthRoleManager.Migrations
                     b.ToTable("asp_net_users", (string)null);
                 });
 
+            modelBuilder.Entity("AuthRoleManager.Models.ApplicationUserRole", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RoleId")
+                        .HasColumnType("text");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("ix_application_user_roles_role_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_application_user_roles_user_id");
+
+                    b.ToTable("asp_net_user_roles", (string)null);
+                });
+
             modelBuilder.Entity("AuthRoleManager.Models.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -145,7 +164,7 @@ namespace AuthRoleManager.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Role");
+                    b.ToTable("role");
                 });
 
             modelBuilder.Entity("AuthRoleManager.Models.User", b =>
@@ -267,22 +286,6 @@ namespace AuthRoleManager.Migrations
                         .HasDatabaseName("ix_application_user_logins_user_id");
 
                     b.ToTable("asp_net_user_logins", (string)null);
-                });
-
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
-                {
-                    b.Property<string>("UserId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("RoleId")
-                        .HasColumnType("text");
-
-                    b.HasKey("UserId", "RoleId");
-
-                    b.HasIndex("RoleId")
-                        .HasDatabaseName("ix_application_user_roles_role_id");
-
-                    b.ToTable("asp_net_user_roles", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
@@ -512,6 +515,25 @@ namespace AuthRoleManager.Migrations
                     b.ToTable("OpenIddictTokens", (string)null);
                 });
 
+            modelBuilder.Entity("AuthRoleManager.Models.ApplicationUserRole", b =>
+                {
+                    b.HasOne("AuthRoleManager.Models.ApplicationRole", "Role")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AuthRoleManager.Models.ApplicationUser", "User")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("AuthRoleManager.Models.User", b =>
                 {
                     b.HasOne("AuthRoleManager.Models.Role", "Role")
@@ -524,7 +546,7 @@ namespace AuthRoleManager.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("AuthRoleManager.Models.ApplicationRole", null)
-                        .WithMany()
+                        .WithMany("RoleClaims")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -543,21 +565,6 @@ namespace AuthRoleManager.Migrations
                 {
                     b.HasOne("AuthRoleManager.Models.ApplicationUser", null)
                         .WithMany("Logins")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
-                {
-                    b.HasOne("AuthRoleManager.Models.ApplicationRole", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("AuthRoleManager.Models.ApplicationUser", null)
-                        .WithMany("UserRoles")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -594,6 +601,13 @@ namespace AuthRoleManager.Migrations
                     b.Navigation("Application");
 
                     b.Navigation("Authorization");
+                });
+
+            modelBuilder.Entity("AuthRoleManager.Models.ApplicationRole", b =>
+                {
+                    b.Navigation("RoleClaims");
+
+                    b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("AuthRoleManager.Models.ApplicationUser", b =>
