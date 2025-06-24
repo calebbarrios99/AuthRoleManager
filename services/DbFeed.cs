@@ -1,5 +1,7 @@
+using System.Reflection.Metadata;
 using AuthRoleManager.Data;
 using AuthRoleManager.Models;
+using AuthRoleManager.Utilities;
 using Microsoft.AspNetCore.Identity;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -37,7 +39,7 @@ public class DbFeed(IServiceProvider services, ILogger<DbFeed> logger) : IHosted
         >();
 
         // Verificar si el rol ya existe antes de crearlo
-        var roleName = "SuperUser";
+        var roleName = Roles.SuperUser;
         if (!await roleManager.RoleExistsAsync(roleName))
         {
             var role = new ApplicationRole { Name = roleName };

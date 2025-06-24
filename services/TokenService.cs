@@ -6,10 +6,12 @@ namespace AuthRoleManager.Services;
 public class TokenService
 {
     private readonly IOpenIddictTokenManager _tokenManager;
+    private readonly ILogger<TokenService> _logger;
 
-    public TokenService(IOpenIddictTokenManager tokenManager)
+    public TokenService(IOpenIddictTokenManager tokenManager, ILogger<TokenService> logger)
     {
         _tokenManager = tokenManager;
+        _logger = logger;
     }
 
     public async Task<bool> RevokeTokenAsync(string tokenId)
@@ -33,6 +35,46 @@ public class TokenService
                 $"Revoking token: {(token as OpenIddictEntityFrameworkCoreToken)?.ConcurrencyToken}"
             );
             // await _tokenManager.DeleteAsync(token);
+        }
+    }
+
+    public async Task<bool> IsTokenRevokedAsync(string userId, string tokenId)
+    {
+        _logger.LogInformation(
+            "🔍 Checking token revocation - UserId: '{UserId}', TokenId: '{TokenId}'",
+            userId,
+            tokenId
+        );
+
+        try
+        {
+            var token = await _tokenManager.FindByIdAsync(tokenId);
+
+            if (token == null)
+            {
+                _logger.LogInformation(
+                    "⚠️ Token not found in database: {TokenId} - Assuming NOT revoked",
+                    tokenId
+                );
+                return false;
+            }
+
+            var status = await _tokenManager.GetStatusAsync(token);
+            var isRevoked = status == OpenIddictConstants.Statuses.Revoked;
+
+            _logger.LogInformation(
+                "📊 Token {TokenId} - Status: '{Status}', IsRevoked: {IsRevoked}",
+                tokenId,
+                status,
+                isRevoked
+            );
+
+            return isRevoked;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error in IsTokenRevokedAsync for TokenId: {TokenId}", tokenId);
+            return false; // En caso de error, no bloquear
         }
     }
 }

@@ -55,7 +55,11 @@ public class AuthorizationController : Controller
         Roles = "SuperUser",
         AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme
     )]
-    [HttpPost("~/revoke/token/{userId}"), IgnoreAntiforgeryToken, Produces("application/json")]
+    [
+        HttpPost("~/connect/revocation/{userId}"),
+        IgnoreAntiforgeryToken,
+        Produces("application/json")
+    ]
     public async Task<IActionResult> RevokeToken(string userId)
     {
         var user = await _userManager.FindByIdAsync(userId);

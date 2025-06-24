@@ -2,6 +2,7 @@ using AuthRoleManager.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace AuthRoleManager.Data;
 
@@ -22,6 +23,7 @@ public class ApplicationDbContext
 
     public DbSet<User> users { get; set; } = null!;
     public DbSet<Role> role { get; set; } = null!;
+    public DbSet<OpenIddictEntityFrameworkCoreToken> OpenIddictTokens { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

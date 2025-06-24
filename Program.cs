@@ -3,6 +3,7 @@ using System.Text;
 using AuthRoleManager;
 using AuthRoleManager.Data;
 using AuthRoleManager.Managers;
+using AuthRoleManager.Middleware;
 using AuthRoleManager.Models;
 using AuthRoleManager.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -119,7 +120,10 @@ builder
     .AddServer(options =>
     {
         // Enable the token endpoint.
-        options.SetTokenEndpointUris("connect/token");
+        // Enable the token endpoint.
+        options
+            .SetTokenEndpointUris("connect/token")
+            .SetRevocationEndpointUris("/connect/revocation");
 
         // options.UseReferenceAccessTokens();
 
@@ -173,6 +177,7 @@ builder
     );
 #endregion
 
+
 #region background Services
 // builder.Services.AddHostedService<DbFeed>();
 #endregion
@@ -184,7 +189,11 @@ app.UseRouting();
 app.UseCors();
 
 app.UseAuthentication();
+
 app.UseAuthorization();
+#region Middleware
+app.UseMiddleware<TokenRevocationMiddleware>();
+#endregion
 
 app.UseOpenApi();
 app.UseSwaggerUi(config =>
