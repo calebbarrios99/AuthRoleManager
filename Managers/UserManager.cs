@@ -1,23 +1,39 @@
+using System.Security.Claims;
 using AuthRoleManager.Models;
 using AuthRoleManager.Models.Dto;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
 
-public class UserCreationManager
+namespace AuthRoleManager.Managers;
+
+public class UserManager
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
-    private readonly ILogger<UserCreationManager> _logger;
+    private readonly ILogger<UserManager> _logger;
 
-    public UserCreationManager(
+    public UserManager(
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
-        ILogger<UserCreationManager> logger
+        ILogger<UserManager> logger
     )
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _logger = logger;
+    }
+
+    // Método que recibe el ClaimsPrincipal del usuario autenticado
+    public async Task<ApplicationUser> GetCurrentUserAsync(ClaimsPrincipal userPrincipal)
+    {
+        var user = await _userManager.GetUserAsync(userPrincipal);
+        if (user == null)
+        {
+            throw new UnauthorizedAccessException("User not found or not authenticated");
+        }
+        return user;
     }
 
     public async Task<object?> CreateUserWithRoleAsync([FromBody] CreateUserRequest request)

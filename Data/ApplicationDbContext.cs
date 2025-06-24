@@ -109,17 +109,3 @@ public class ApplicationDbContext
         //     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);
     }
 }
-// modelBuilder
-//     .Entity<User>()
-//     .Property(p => p.FullName)
-//     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);
-// Temporalmente comentado hasta crear las tablas principales
-// modelBuilder
-//     .Entity<User>()
-//     .Property(p => p.FullName)
-//     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);
-
-// modelBuilder
-//     .Entity<User>()
-//     .Property(p => p.FullName)
-//     .HasComputedColumnSql(@"""Name"" || ' ' || coalesce(""LastName"", '')", stored: true);

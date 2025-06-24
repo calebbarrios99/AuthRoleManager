@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using AuthRoleManager;
 using AuthRoleManager.Data;
+using AuthRoleManager.Managers;
 using AuthRoleManager.Models;
 using AuthRoleManager.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -41,7 +42,7 @@ builder.Services.AddControllers();
 
 #region Managers
 builder.Services.AddScoped<LoginManager>();
-builder.Services.AddScoped<UserCreationManager>();
+builder.Services.AddScoped<UserManager>();
 #endregion
 
 #region  identity
@@ -173,7 +174,7 @@ builder
 #endregion
 
 #region background Services
-builder.Services.AddHostedService<DbFeed>();
+// builder.Services.AddHostedService<DbFeed>();
 #endregion
 
 var app = builder.Build();

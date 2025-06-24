@@ -1,4 +1,5 @@
 using System.Collections;
+using AuthRoleManager.Managers;
 using AuthRoleManager.Models.Dto;
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
@@ -6,14 +7,16 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Validation.AspNetCore;
 
+namespace AuthRoleManager.Controllers;
+
 [ApiController]
 [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
 [Route("api/[controller]")]
 public class RegisterController : ControllerBase
 {
-    private readonly UserCreationManager _userCreationManager;
+    private readonly UserManager _userCreationManager;
 
-    public RegisterController(UserCreationManager userCreationManager)
+    public RegisterController(UserManager userCreationManager)
     {
         _userCreationManager = userCreationManager;
     }
