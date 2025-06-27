@@ -28,13 +28,9 @@ public class RegisterController : ControllerBase
         return Ok(result);
     }
 
-    // [HttpPost("create/user")]
-    // public async Task<IActionResult> CreateUser([FromBody] dynamic request)
-    // {
-    //     string email = request.email;
-    //     string password = request.password;
-
-    //     var result = await _userCreationManager.CreateUserWithRoleAsync(email, password, "User");
-    //     return Ok(result);
-    // }
+    [HttpPost("create/user")]
+    public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
+    {
+        return await _userCreationManager.CreateUserWithRoleAsync(request);
+    }
 }

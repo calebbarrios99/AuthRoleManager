@@ -40,11 +40,7 @@ public class TokenService
 
     public async Task<bool> IsTokenRevokedAsync(string userId, string tokenId)
     {
-        _logger.LogInformation(
-            "🔍 Checking token revocation - UserId: '{UserId}', TokenId: '{TokenId}'",
-            userId,
-            tokenId
-        );
+
 
         try
         {
@@ -52,22 +48,13 @@ public class TokenService
 
             if (token == null)
             {
-                _logger.LogInformation(
-                    "⚠️ Token not found in database: {TokenId} - Assuming NOT revoked",
-                    tokenId
-                );
+
                 return false;
             }
 
             var status = await _tokenManager.GetStatusAsync(token);
             var isRevoked = status == OpenIddictConstants.Statuses.Revoked;
 
-            _logger.LogInformation(
-                "📊 Token {TokenId} - Status: '{Status}', IsRevoked: {IsRevoked}",
-                tokenId,
-                status,
-                isRevoked
-            );
 
             return isRevoked;
         }

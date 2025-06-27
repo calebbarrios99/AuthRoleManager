@@ -6,6 +6,7 @@ using AuthRoleManager.Managers;
 using AuthRoleManager.Middleware;
 using AuthRoleManager.Models;
 using AuthRoleManager.Services;
+using AuthRoleManager.Utilities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -61,6 +62,10 @@ builder
 // Scoped -> un servicio que se crea una vez por solicitud HTTP.
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<PostgresService>();
+// AGREGAR: Memory Cache y el authorization handler
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IAuthorizationHandler, ClaimsService>();
+
 builder.Services.AddScoped<
     Microsoft.AspNetCore.Identity.IPasswordHasher<User>,
     Microsoft.AspNetCore.Identity.PasswordHasher<User>
@@ -156,25 +161,47 @@ builder
 #endregion
 
 #region Policies
+// Políticas específicas por funcionalidad
+var permissions = new Dictionary<string, string>
+{
+    ["profileView"] = "profile.view",
+    ["profileEdit"] = "profile.edit",
+};
+
+// Crear políticas dinámicamente
+foreach (var (policyName, permissionValue) in permissions)
+{
+    builder
+        .Services.AddAuthorizationBuilder()
+        .AddPolicy(
+            policyName,
+            policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.RequireClaim("permission", permissionValue);
+            }
+        );
+}
 
 builder
     .Services.AddAuthorizationBuilder()
     .AddPolicy(
-        "categoryAdd",
+        "SuperUserOnly",
         policy =>
         {
             policy.RequireAuthenticatedUser();
-            policy.RequireClaim("permission", "category.add");
+            policy.RequireRole(Roles.SuperUser);
         }
     )
     .AddPolicy(
-        "productAdd",
+        "SuperUserOrUser",
         policy =>
         {
             policy.RequireAuthenticatedUser();
-            policy.RequireClaim("permission", "product.add");
+            policy.RequireRole(Roles.SuperUser, Roles.User);
         }
     );
+
 #endregion
 
 

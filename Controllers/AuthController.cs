@@ -129,14 +129,9 @@ public class AuthorizationController : Controller
                 roleType: Claims.Role
             );
 
-            var userRole = _context
-                .UserRoles.Include(x => x.Role)
-                .ThenInclude(r => r.RoleClaims)
-                .AsNoTracking() // Use AsNoTracking to avoid tracking changes to the entities
-                .FirstOrDefault(u => u.UserId == user.Id);
-
-            var role = userRole?.Role?.Name ?? "";
-            var claims = userRole?.Role?.RoleClaims?.ToList() ?? [];
+            // Obtener el rol del usuario para incluir en el token
+            var userRoles = await _userManager.GetRolesAsync(user);
+            var role = userRoles.FirstOrDefault() ?? "";
 
             // Add the claims that will be persisted in the tokens.
             identity
@@ -146,11 +141,7 @@ public class AuthorizationController : Controller
                 .SetClaim(Claims.PreferredUsername, await _userManager.GetUserNameAsync(user))
                 .SetClaim(Claims.Role, role);
 
-            foreach (var claim in claims)
-            {
-                if (claim.ClaimType == "permission")
-                    identity.AddClaim(new Claim(claim.ClaimType, claim.ClaimValue ?? ""));
-            }
+            // Los permisos ya NO se incluyen en el token - se leen desde BD
 
             // Note: in this sample, the granted scopes match the requested scope
             // but you may want to allow the user to uncheck specific scopes.

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using AuthRoleManager.Data;
 using AuthRoleManager.Models;
 using AuthRoleManager.Models.Dto;
+using AuthRoleManager.Utilities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
@@ -41,10 +42,10 @@ public class UserManager
         return user;
     }
 
-    public async Task<object?> CreateUserWithRoleAsync([FromBody] CreateUserRequest request)
+    public async Task<IActionResult> CreateUserWithRoleAsync([FromBody] CreateUserRequest request)
     {
         {
-            var roleName = "User";
+            var roleName = Roles.User;
             // Crear rol si no existe
             var roleExists = await _roleManager.RoleExistsAsync(roleName);
             if (!roleExists)
@@ -53,7 +54,9 @@ public class UserManager
                 var roleResult = await _roleManager.CreateAsync(role);
                 if (!roleResult.Succeeded)
                 {
-                    return new { Error = "Failed to create role" };
+                    return new BadRequestObjectResult(
+                        new { Error = roleResult.Errors.Select(e => e.Description) }
+                    );
                 }
             }
 
@@ -75,7 +78,9 @@ public class UserManager
                     request.Email,
                     string.Join(", ", result.Errors.Select(e => e.Description))
                 );
-                return new { Error = "Failed to create user" };
+                return new BadRequestObjectResult(
+                    new { Error = result.Errors.Select(e => e.Description) }
+                );
             }
 
             // Asignar rol
@@ -86,12 +91,14 @@ public class UserManager
                 roleName
             );
 
-            return new
-            {
-                Success = true,
-                UserId = user.Id,
-                Role = roleName,
-            };
+            return new ObjectResult(
+                new
+                {
+                    Success = true,
+                    UserId = user.Id,
+                    Role = roleName,
+                }
+            );
         }
     }
 

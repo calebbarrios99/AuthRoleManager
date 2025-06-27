@@ -29,6 +29,7 @@ namespace AuthRoleManager.Controllers
         /// <returns>Lista de claims del usuario actual</returns>
         /// <summary>
         [HttpGet()]
+        [Authorize(Policy = "profileView")]
         public async Task<IActionResult> GetProfileAsync()
         {
             try
