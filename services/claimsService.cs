@@ -12,7 +12,6 @@ namespace AuthRoleManager.Services;
 
 public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
 {
-    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _context;
     private readonly IMemoryCache _cache;
     private readonly ILogger<ClaimsService> _logger;
@@ -27,7 +26,6 @@ public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
         ILogger<ClaimsService> logger
     )
     {
-        _userManager = userManager;
         _context = context;
         _cache = cache;
         _logger = logger;
