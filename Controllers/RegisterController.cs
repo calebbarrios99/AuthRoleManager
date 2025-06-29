@@ -10,6 +10,7 @@ using OpenIddict.Validation.AspNetCore;
 namespace AuthRoleManager.Controllers;
 
 [ApiController]
+[Authorize(policy: "SuperUserOnly")]
 [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
 [Route("api/[controller]")]
 public class RegisterController : ControllerBase

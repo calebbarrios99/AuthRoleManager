@@ -5,14 +5,15 @@ using AuthRoleManager.Data;
 using AuthRoleManager.Managers;
 using AuthRoleManager.Middleware;
 using AuthRoleManager.Models;
+using AuthRoleManager.Models.Authorization;
 using AuthRoleManager.Services;
 using AuthRoleManager.Utilities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization; // ← AGREGAR este using
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Quartz;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
 var env = builder.Environment;
@@ -62,6 +63,7 @@ builder
 // Scoped -> un servicio que se crea una vez por solicitud HTTP.
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<PostgresService>();
+
 // AGREGAR: Memory Cache y el authorization handler
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAuthorizationHandler, ClaimsService>();
@@ -161,6 +163,10 @@ builder
 #endregion
 
 #region Policies
+
+// Crear el authorization builder UNA VEZ
+var authorizationBuilder = builder.Services.AddAuthorizationBuilder();
+
 // Políticas específicas por funcionalidad
 var permissions = new Dictionary<string, string>
 {
@@ -168,23 +174,21 @@ var permissions = new Dictionary<string, string>
     ["profileEdit"] = "profile.edit",
 };
 
-// Crear políticas dinámicamente
+// Crear políticas dinámicamente usando DatabasePermissionRequirement
 foreach (var (policyName, permissionValue) in permissions)
 {
-    builder
-        .Services.AddAuthorizationBuilder()
-        .AddPolicy(
-            policyName,
-            policy =>
-            {
-                policy.RequireAuthenticatedUser();
-                policy.RequireClaim("permission", permissionValue);
-            }
-        );
+    authorizationBuilder.AddPolicy(
+        policyName,
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.AddRequirements(new ApiPermissionRequirement(permissionValue));
+        }
+    );
 }
 
-builder
-    .Services.AddAuthorizationBuilder()
+// Políticas especiales
+authorizationBuilder
     .AddPolicy(
         "SuperUserOnly",
         policy =>

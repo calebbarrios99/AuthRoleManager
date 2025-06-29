@@ -30,7 +30,6 @@ public class AuthorizationController : Controller
     private readonly TokenService _tokenService;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly RoleManager<ApplicationRole> _roleManager;
 
     public AuthorizationController(
         IOpenIddictApplicationManager applicationManager,
@@ -47,7 +46,6 @@ public class AuthorizationController : Controller
         _context = context;
         _signInManager = signInManager;
         _userManager = userManager;
-        _roleManager = roleManager;
         _tokenService = tokenService;
     }
 
