@@ -223,7 +223,7 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 #region Middleware
-app.UseMiddleware<TokenRevocationMiddleware>();
+// app.UseMiddleware<TokenRevocationMiddleware>();
 #endregion
 
 app.UseOpenApi();

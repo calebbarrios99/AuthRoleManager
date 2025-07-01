@@ -16,11 +16,7 @@ public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
     private readonly IMemoryCache _cache;
     private readonly ILogger<ClaimsService> _logger;
 
-    // Cache por 5 minutos
-    private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
-
     public ClaimsService(
-        UserManager<ApplicationUser> userManager,
         ApplicationDbContext context,
         IMemoryCache cache,
         ILogger<ClaimsService> logger
@@ -36,17 +32,10 @@ public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
         ApiPermissionRequirement requirement
     )
     {
-        _logger.LogInformation(
-            "🔍 Checking permission {Permission} for user {User}",
-            requirement.Permission,
-            context.User.Identity?.Name ?? "Unknown"
-        );
-
         var user = context.User;
 
         if (!user.Identity?.IsAuthenticated ?? true)
         {
-            _logger.LogWarning("❌ User not authenticated");
             context.Fail();
             return;
         }
@@ -56,64 +45,25 @@ public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
 
         if (string.IsNullOrEmpty(userId))
         {
-            _logger.LogWarning("❌ UserId not found in token");
             context.Fail();
             return;
         }
 
-        _logger.LogInformation("👤 Found UserId: {UserId}", userId);
-
         try
         {
-            // Clave única para el cache
-            var cacheKey = $"user_permission_{userId}_{requirement.Permission}";
+            // Obtener todas las claims del usuario (desde cache o BD)
+            var userClaims = await GetUserClaimsAsync(userId);
 
-            if (_cache.TryGetValue(cacheKey, out bool cachedResult))
-            {
-                _logger.LogInformation(
-                    "⚡ Permission check from CACHE: User {UserId}, role  Permission {Permission}, Result: {Result}",
-                    userId,
-                    requirement.Permission,
-                    cachedResult
-                );
-
-                if (cachedResult)
-                    context.Succeed(requirement);
-                else
-                    context.Fail();
-                return;
-            }
-
-            _logger.LogInformation("🔍 Cache miss, checking database for user {UserId}", userId);
-
-            // Si no está en cache, consultar la BD
-            var hasPermission = await UserHasPermissionAsync(userId, requirement.Permission);
-
-            // Guardar en cache
-            var cacheOptions = new MemoryCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = _cacheExpiration,
-                SlidingExpiration = TimeSpan.FromMinutes(2), // Renueva si se usa
-                Priority = CacheItemPriority.Normal,
-            };
-
-            _cache.Set(cacheKey, hasPermission, cacheOptions);
-
-            _logger.LogInformation(
-                "💾 Permission check from DATABASE (cached): User {UserId}, Permission {Permission}, Result: {Result}",
-                userId,
-                requirement.Permission,
-                hasPermission
-            );
+            // Verificar si el usuario tiene el permiso requerido
+            var hasPermission =
+                userClaims.Contains(requirement.Permission) || user.IsInRole(Roles.SuperUser); // SuperUser tiene todos los permisos
 
             if (hasPermission)
             {
-                _logger.LogInformation("✅ Access GRANTED for user {UserId}", userId);
                 context.Succeed(requirement);
             }
             else
             {
-                _logger.LogWarning("❌ Access DENIED for user {UserId}", userId);
                 context.Fail();
             }
         }
@@ -121,7 +71,7 @@ public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
         {
             _logger.LogError(
                 ex,
-                "💥 Error checking permission {Permission} for user {UserId}",
+                "Error checking permission {Permission} for user {UserId}",
                 requirement.Permission,
                 userId
             );
@@ -129,69 +79,86 @@ public class ClaimsService : AuthorizationHandler<ApiPermissionRequirement>
         }
     }
 
-    private async Task<bool> UserHasPermissionAsync(string userId, string permission)
+    private async Task<HashSet<string>> GetUserClaimsAsync(string userId)
     {
-        _logger.LogInformation(
-            "🔍 Checking permission in database: {Permission} for user {UserId}",
-            permission,
-            userId
-        );
+        var cacheKey = $"user_all_claims_{userId}";
 
-        // Verificar permisos directos del usuario
-        var hasDirectPermission = await _context.UserClaims.AnyAsync(uc =>
-            uc.UserId == userId && uc.ClaimType == "permission" && uc.ClaimValue == permission
-        );
-
-        if (hasDirectPermission)
+        // Intentar obtener del cache
+        if (_cache.TryGetValue(cacheKey, out HashSet<string>? cachedClaims))
         {
-            _logger.LogInformation(
-                "✅ User {UserId} has DIRECT permission {Permission}",
-                userId,
-                permission
-            );
-            return true;
+            _logger.LogInformation("Cache user {UserId}", userId);
+            return cachedClaims!;
         }
 
-        // Verificar permisos por rol
-        var userRole = await _context
-            .UserRoles.Include(x => x.Role)
-            .ThenInclude(r => r != null ? r.RoleClaims : null!)
-            .AsNoTracking() // Use AsNoTracking to avoid tracking changes to the entities
-            .FirstOrDefaultAsync(u => u.UserId == userId);
+        // Si no están en cache, cargar desde la base de datos
+        var userClaims = await LoadUserClaimsFromDatabaseAsync(userId);
 
-        var role = userRole?.Role?.Name ?? "";
-        var claims = userRole?.Role?.RoleClaims?.ToList() ?? new List<IdentityRoleClaim<string>>();
+        // Guardar en cache permanentemente
+        var cacheOptions = new MemoryCacheEntryOptions
+        {
+            SlidingExpiration = TimeSpan.FromSeconds(5), //  Expira en 1 segundo, si no se calcula este cache en un segundo se elimina automaticamente
+            // Priority = CacheItemPriority.NeverRemove, //  nunca remover automáticamente
+        };
+
+        _cache.Set(cacheKey, userClaims, cacheOptions);
 
         _logger.LogInformation(
-            "👤 User {UserId} has role: {Role} with {ClaimCount} claims",
+            "Cache SAVED for user {UserId} - {ClaimCount} claims",
             userId,
-            role,
-            claims.Count
+            userClaims.Count
         );
 
-        // Verificar si el rol tiene el permiso solicitado
-        var hasRolePermission =
-            claims.Any(c => c.ClaimType == "permission" && c.ClaimValue == permission)
-            || role == Roles.SuperUser;
+        return userClaims;
+    }
 
-        if (hasRolePermission)
+    private async Task<HashSet<string>> LoadUserClaimsFromDatabaseAsync(string userId)
+    {
+        var allClaims = new HashSet<string>();
+
+        try
         {
-            _logger.LogInformation(
-                "✅ User {UserId} has ROLE permission {Permission} via role {Role}",
-                userId,
-                permission,
-                role
-            );
+            //  Cargar claims del rol del usuario
+            var userRole = await _context
+                .UserRoles.Include(x => x.Role)
+                .ThenInclude(r => r != null ? r.RoleClaims : null!)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (userRole?.Role != null)
+            {
+                var roleName = userRole.Role.Name ?? "";
+                var roleClaims = userRole.Role.RoleClaims?.ToList() ?? [];
+
+                // Agregar el rol como claim especial
+                if (!string.IsNullOrEmpty(roleName))
+                {
+                    allClaims.Add($"role:{roleName}");
+                }
+
+                // Agregar todas las claims del rol
+                foreach (
+                    var roleClaim in roleClaims.Where(rc =>
+                        rc.ClaimType == "permission" && !string.IsNullOrEmpty(rc.ClaimValue)
+                    )
+                )
+                {
+                    allClaims.Add(roleClaim.ClaimValue!);
+                }
+            }
         }
-        else
+        catch (Exception ex)
         {
-            _logger.LogWarning(
-                "❌ User {UserId} does NOT have permission {Permission}",
-                userId,
-                permission
-            );
+            _logger.LogError(ex, "Error loading claims from database for user {UserId}", userId);
+            throw;
         }
 
-        return hasRolePermission;
+        return allClaims;
+    }
+
+    public void InvalidateUserClaims(string userId)
+    {
+        var cacheKey = $"user_all_claims_{userId}";
+        _cache.Remove(cacheKey);
+        _logger.LogInformation("Cache INVALIDATED for user {UserId}", userId);
     }
 }
